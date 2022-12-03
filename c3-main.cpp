@@ -57,6 +57,9 @@ void keyboardEventOccurred(const pcl::visualization::KeyboardEvent &event, void*
 	else if (event.getKeySym() == "Down" && event.keyDown()){
 		cs.push_back(ControlState(-0.1, 0, 0)); 
   	}
+	else if(event.getKeySym() == "1" && event.keyDown()){
+		cs.push_back(ControlState(0.3, 0, 0)); 
+	}
 	if(event.getKeySym() == "a" && event.keyDown()){
 		refresh_view = true;
 	}
@@ -135,9 +138,9 @@ Eigen::Matrix4d NDT(pcl::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointX
 	Eigen::Matrix4f  starting_estimate = transform3D(startPose.rotation.yaw,
 											startPose.rotation.pitch,
 											startPose.rotation.roll,
-											startPose.rotation.x,
-											startPose.rotation.y,
-											startPose.rotation.z).cast<float>();
+											startPose.position.x,
+											startPose.position.y,
+											startPose.position.z).cast<float>();
 	
 	ndt.setInputSource(source);
 	ndt.setMaximumIterations(iterations);
