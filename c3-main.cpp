@@ -100,14 +100,65 @@ void drawCar(Pose pose, int num, Color color, double alpha, pcl::visualization::
 }
 
 Eigen::Matrix4d ICP(PointCloudT::Ptr target, PointCloudT::Ptr source, Pose startPose, int iterations){
+	Eigen::Matrix4d startingTransform = transform3D (startPose.rotation.yaw,
+													startPose.rotation.pitch,
+													startPose.rotation.roll,
+													startPose.position.x,
+													startPose.position.y,
+													startPose.position.z);
+	PointCloudT::Ptr tfSource(new PointCloudT);
+	pcl::transformPointCloud(*source, *tfSource, startingTransform);
 
+	pcl::console::TicToc time;
+	time.tic();
+	pcl::IterativeClosestPoint<PointT, PointT> icp;
+
+	icp.setInputSource(tfSource);
+	icp.setInputTarget(target);
+	icp.setMaximumIterations(iterations);
+	icp.setMaxCorrespondenceDistance(2);
+
+	PointCloudT::Ptr pcl_icp(new PointCloudT);
+	icp.align(*pcl_icp);
+
+	if(!icp.hasConverged()){
+		return Eigen::Matrix4d::Identity();
+	}
+
+	return icp.getFinalTransformation().cast<double>() * startingTransform;
 }
 
 Eigen::Matrix4d NDT(pcl::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointXYZ> ndt, PointCloudT::Ptr source, Pose startPose, int iterations){
+	pcl::console::TicToc time;
+	time.tic();
 
+	Eigen::Matrix4f  starting_estimate = transform3D(startPose.rotation.yaw,
+											startPose.rotation.pitch,
+											startPose.rotation.roll,
+											startPose.rotation.x,
+											startPose.rotation.y,
+											startPose.rotation.z).cast<float>();
+	
+	ndt.setInputSource(source);
+	ndt.setMaximumIterations(iterations);
+
+	pcl::PointCloud<pcl::PointXYZ>::Ptr pcl_ndt(new pcl::PointCloud<pcl::PointXYZ>);
+	ndt.align(*pcl_ndt, starting_estimate);
+
+	if(!ndt.hasConverged())
+	{
+		return Eigen::Matrix4d::Identity();
+	}
+
+	return ndt.getFinalTransformation().cast<double>();
 }
 
-int main(){
+int main(int argc, char **argv){
+	bool methodICP = false;
+	int iterations = 10;
+	double leafSize= 1.0;
+	iterations = atoi(argv[2]);
+	leafSize = atof(argv[3]);
 
 	auto client = cc::Client("localhost", 2000);
 	client.SetTimeout(2s);
@@ -152,6 +203,13 @@ int main(){
 
 	typename pcl::PointCloud<PointT>::Ptr cloudFiltered (new pcl::PointCloud<PointT>);
 	typename pcl::PointCloud<PointT>::Ptr scanCloud (new pcl::PointCloud<PointT>);
+
+	pcl::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointXYZ> ndt;
+
+	ndt.setTransformationEpsilon(0.0001);
+	ndt.setStepSize(0.1);
+	ndt.setResolution(1);
+	ndt.setInputTarget(mapCloud);
 
 	lidar->Listen([&new_scan, &lastScanTime, &scanCloud](auto data){
 
@@ -209,19 +267,19 @@ int main(){
 			
 			new_scan = true;
 			// Filter scan using voxel filter
-			pcl::VoxelGrid<Point> voxelFilter;
+			pcl::VoxelGrid<PointT> voxelFilter;
 			voxelFilter.setInputCloud(scanCloud);
-			voxelFilter.setLeafSize(leafSize, leafeSize, leafSize);
+			voxelFilter.setLeafSize(leafSize, leafSize, leafSize);
 			voxelFilter.filter(*cloudFiltered);
 
 			// Find pose transform by using ICP or NDT matching
 			Eigen::Matrix4d transform = transform3D(pose.rotation.yaw, pose.rotation.pitch, pose.rotation.roll, pose.position.x, pose.position.y, pose.position.z);
 			PointCloudT::Ptr transformed_scan(new PointCloudT);
 
-			if(useIcp){
-				transform = ICP(mapcloud, cloudFiltered, pose, iterations);
+			if(methodICP){
+				transform = ICP(mapCloud, cloudFiltered, pose, iterations);
 			} else {
-				transform = NDT(ndt, cloudFiltere, pose, iterations);
+				transform = NDT(ndt, cloudFiltered, pose, iterations);
 			}
 			pose = getPose(transform);
 
