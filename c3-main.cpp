@@ -145,6 +145,7 @@ Eigen::Matrix4d NDT(PointCloudT::Ptr mapCloud, PointCloudT::Ptr source, Pose sta
 	ndt.setInputSource(source);
 	ndt.setMaximumIterations(iterations);
 
+	// ndt.setTransformationEpsilon(1e-3);
 	ndt.setTransformationEpsilon(1e-3);
 	ndt.setResolution(5);
 	ndt.setInputTarget(mapCloud);
@@ -298,7 +299,7 @@ int main(int argc, char **argv){
 
 			// Find pose transform by using ICP or NDT matching
 			Eigen::Matrix4d transform = transform3D(pose.rotation.yaw, pose.rotation.pitch, pose.rotation.roll, pose.position.x, pose.position.y, pose.position.z);
-			PointCloudT::Ptr transformed_scan(new PointCloudT);
+			// PointCloudT::Ptr transformed_scan(new PointCloudT);
 
 			if(methodICP){
 				transform = ICP(mapCloud, cloudFiltered, pose, iterations);
@@ -306,6 +307,8 @@ int main(int argc, char **argv){
 				transform = NDT(mapCloud, cloudFiltered, pose, iterations);
 			}
 			pose = getPose(transform);
+
+			PointCloudT::Ptr transformed_scan(new PointCloudT);
 
 			// Transform scan so it aligns with ego's actual pose and render that scan
 			pcl::transformPointCloud(*cloudFiltered, *transformed_scan, transform);
