@@ -43,7 +43,7 @@ vector<ControlState> cs;
 bool refresh_view = false;
 void keyboardEventOccurred(const pcl::visualization::KeyboardEvent &event, void* viewer)
 {
-
+	printf("Key pressed %s\n", event.getKeySym());
   	//boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer = *static_cast<boost::shared_ptr<pcl::visualization::PCLVisualizer> *>(viewer_void);
 	if (event.getKeySym() == "Right" && event.keyDown()){
 		cs.push_back(ControlState(0, -0.02, 0));
@@ -125,13 +125,13 @@ Eigen::Matrix4d ICP(PointCloudT::Ptr target, PointCloudT::Ptr source, Pose start
 	icp.align(*pcl_icp);
 
 	if(!icp.hasConverged()){
-		return Eigen::Matrix4d::Identity();
+		return Eigen::Matrix4d::Identity(4,4);
 	}
 
 	return icp.getFinalTransformation().cast<double>() * startingTransform;
 }
 
-Eigen::Matrix4d NDT(pcl::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointXYZ> ndt, PointCloudT::Ptr source, Pose startPose, int iterations){
+Eigen::Matrix4d NDT(PointCloudT::Ptr mapCloud, PointCloudT::Ptr source, Pose startPose, int iterations){
 	pcl::console::TicToc time;
 	time.tic();
 
@@ -141,12 +141,18 @@ Eigen::Matrix4d NDT(pcl::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointX
 											startPose.position.x,
 											startPose.position.y,
 											startPose.position.z).cast<float>();
-	
+	pcl::NormalDistributionsTransform<PointT, PointT> ndt;
 	ndt.setInputSource(source);
 	ndt.setMaximumIterations(iterations);
 
-	pcl::PointCloud<pcl::PointXYZ>::Ptr pcl_ndt(new pcl::PointCloud<pcl::PointXYZ>);
-	ndt.align(*pcl_ndt, starting_estimate);
+	ndt.setTransformationEpsilon(1e-3);
+	ndt.setResolution(5);
+	ndt.setInputTarget(mapCloud);
+
+	// pcl::PointCloud<pcl::PointXYZ>::Ptr pcl_ndt(new pcl::PointCloud<pcl::PointXYZ>);
+	//pcl::NotrmalDistributionsTransform<PointT, PointT> ndt;
+	PointCloudT::Ptr ndt_cloud;
+	ndt.align(*ndt_cloud, starting_estimate);
 
 	if(!ndt.hasConverged())
 	{
@@ -158,10 +164,25 @@ Eigen::Matrix4d NDT(pcl::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointX
 
 int main(int argc, char **argv){
 	bool methodICP = false;
-	int iterations = 10;
-	double leafSize= 1.0;
-	iterations = atoi(argv[2]);
-	leafSize = atof(argv[3]);
+	int iterations = 100;
+	double leafSize= 0.1;
+	if(argc == 4) {
+		if(strcmp("icp", argv[1]) == 0) {
+			methodICP = true;
+		}
+		else if(strcmp("ndt", argv[1]) == 0) {
+			methodICP = false;
+		}
+		else {
+			printf("Invalid method\n");
+			return -1;
+		}
+		iterations = atoi(argv[2]);
+	    leafSize = atof(argv[3]);
+	}
+	printf("Method %s, iterations %d, leafSize %f, method %d\n", argv[1], iterations, leafSize, methodICP);
+
+
 
 	auto client = cc::Client("localhost", 2000);
 	client.SetTimeout(2s);
@@ -207,12 +228,12 @@ int main(int argc, char **argv){
 	typename pcl::PointCloud<PointT>::Ptr cloudFiltered (new pcl::PointCloud<PointT>);
 	typename pcl::PointCloud<PointT>::Ptr scanCloud (new pcl::PointCloud<PointT>);
 
-	pcl::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointXYZ> ndt;
+	/*pcl::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointXYZ> ndt;
 
 	ndt.setTransformationEpsilon(0.0001);
 	ndt.setStepSize(0.1);
 	ndt.setResolution(1);
-	ndt.setInputTarget(mapCloud);
+	ndt.setInputTarget(mapCloud);*/
 
 	lidar->Listen([&new_scan, &lastScanTime, &scanCloud](auto data){
 
@@ -282,7 +303,7 @@ int main(int argc, char **argv){
 			if(methodICP){
 				transform = ICP(mapCloud, cloudFiltered, pose, iterations);
 			} else {
-				transform = NDT(ndt, cloudFiltered, pose, iterations);
+				transform = NDT(mapCloud, cloudFiltered, pose, iterations);
 			}
 			pose = getPose(transform);
 
