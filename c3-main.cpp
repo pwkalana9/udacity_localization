@@ -142,17 +142,20 @@ Eigen::Matrix4d NDT(PointCloudT::Ptr mapCloud, PointCloudT::Ptr source, Pose sta
 											startPose.position.y,
 											startPose.position.z).cast<float>();
 	pcl::NormalDistributionsTransform<PointT, PointT> ndt;
-	ndt.setInputSource(source);
+	
 	ndt.setMaximumIterations(iterations);
 
 	// ndt.setTransformationEpsilon(1e-3);
 	ndt.setTransformationEpsilon(1e-3);
 	ndt.setResolution(5);
+	// ndt.setStepSize(1);
+	ndt.setInputSource(source);
 	ndt.setInputTarget(mapCloud);
 
-	// pcl::PointCloud<pcl::PointXYZ>::Ptr pcl_ndt(new pcl::PointCloud<pcl::PointXYZ>);
+    //pcl::PointCloud<pcl::PointXYZ>::Ptr ndt_cloud(new pcl::PointCloud<pcl::PointXYZ>);
 	//pcl::NotrmalDistributionsTransform<PointT, PointT> ndt;
-	PointCloudT::Ptr ndt_cloud;
+    PointCloudT::Ptr ndt_cloud(new PointCloudT);
+	// PointCloudT::Ptr ndt_cloud;
 	ndt.align(*ndt_cloud, starting_estimate);
 
 	if(!ndt.hasConverged())
@@ -166,7 +169,7 @@ Eigen::Matrix4d NDT(PointCloudT::Ptr mapCloud, PointCloudT::Ptr source, Pose sta
 int main(int argc, char **argv){
 	bool methodICP = false;
 	int iterations = 100;
-	double leafSize= 0.1;
+	double leafSize= 5.0;
 	if(argc == 4) {
 		if(strcmp("icp", argv[1]) == 0) {
 			methodICP = true;
@@ -308,12 +311,12 @@ int main(int argc, char **argv){
 			}
 			pose = getPose(transform);
 
+			viewer->removePointCloud("scan");
 			PointCloudT::Ptr transformed_scan(new PointCloudT);
 
 			// Transform scan so it aligns with ego's actual pose and render that scan
 			pcl::transformPointCloud(*cloudFiltered, *transformed_scan, transform);
-
-			viewer->removePointCloud("scan");
+			
 			// Change `scanCloud` below to your transformed scan
 			renderPointCloud(viewer, transformed_scan, "scan", Color(1,0,0) );
 
