@@ -103,6 +103,7 @@ void drawCar(Pose pose, int num, Color color, double alpha, pcl::visualization::
 }
 
 Eigen::Matrix4d ICP(PointCloudT::Ptr target, PointCloudT::Ptr source, Pose startPose, int iterations){
+	// set starting pose estimation
 	Eigen::Matrix4d startingTransform = transform3D (startPose.rotation.yaw,
 													startPose.rotation.pitch,
 													startPose.rotation.roll,
@@ -113,28 +114,31 @@ Eigen::Matrix4d ICP(PointCloudT::Ptr target, PointCloudT::Ptr source, Pose start
 	pcl::transformPointCloud(*source, *tfSource, startingTransform);
 
 	pcl::console::TicToc time;
-	time.tic();
+	time.tic(); // start measuring time 
 	pcl::IterativeClosestPoint<PointT, PointT> icp;
 
-	icp.setInputSource(tfSource);
-	icp.setInputTarget(target);
+	icp.setInputSource(tfSource); // Input source
+	icp.setInputTarget(target); // Target
 	icp.setMaximumIterations(iterations);
 	icp.setMaxCorrespondenceDistance(2);
 
 	PointCloudT::Ptr pcl_icp(new PointCloudT);
-	icp.align(*pcl_icp);
+	icp.align(*pcl_icp); // point alignment with ICP
 
 	if(!icp.hasConverged()){
+		// If not converged, return identity matrix
 		return Eigen::Matrix4d::Identity(4,4);
 	}
+	time.toc() // Elapsed time
 
+	// Return the absolute pose, considering the starting estimate
 	return icp.getFinalTransformation().cast<double>() * startingTransform;
 }
 
 Eigen::Matrix4d NDT(PointCloudT::Ptr mapCloud, PointCloudT::Ptr source, Pose startPose, int iterations){
 	pcl::console::TicToc time;
 	time.tic();
-
+	// Starting pose estimate
 	Eigen::Matrix4f  starting_estimate = transform3D(startPose.rotation.yaw,
 											startPose.rotation.pitch,
 											startPose.rotation.roll,
@@ -144,32 +148,32 @@ Eigen::Matrix4d NDT(PointCloudT::Ptr mapCloud, PointCloudT::Ptr source, Pose sta
 	pcl::NormalDistributionsTransform<PointT, PointT> ndt;
 	
 	ndt.setMaximumIterations(iterations);
-
-	// ndt.setTransformationEpsilon(1e-3);
-	ndt.setTransformationEpsilon(1e-3);
-	ndt.setResolution(5);
-	// ndt.setStepSize(1);
+	ndt.setTransformationEpsilon(1e-3); // Epsiolon for passing 
+	ndt.setResolution(5); // Resolution for passing
 	ndt.setInputSource(source);
 	ndt.setInputTarget(mapCloud);
 
-    //pcl::PointCloud<pcl::PointXYZ>::Ptr ndt_cloud(new pcl::PointCloud<pcl::PointXYZ>);
-	//pcl::NotrmalDistributionsTransform<PointT, PointT> ndt;
+    // create new point cloud instance
     PointCloudT::Ptr ndt_cloud(new PointCloudT);
-	// PointCloudT::Ptr ndt_cloud;
+	// Align with NDT approach
 	ndt.align(*ndt_cloud, starting_estimate);
 
 	if(!ndt.hasConverged())
 	{
+		// If not convereged, return the identity matrix
 		return Eigen::Matrix4d::Identity();
 	}
 
+    // return the final pose
 	return ndt.getFinalTransformation().cast<double>();
 }
 
 int main(int argc, char **argv){
 	bool methodICP = false;
-	int iterations = 100;
-	double leafSize= 5.0;
+	int iterations = 100; // default iterations
+	double leafSize= 5.0; // default leaf size
+	// command format 
+	// ./cloud_loc <method: icp or ndt> <no of iterations> <leaf size>
 	if(argc == 4) {
 		if(strcmp("icp", argv[1]) == 0) {
 			methodICP = true;
@@ -185,8 +189,6 @@ int main(int argc, char **argv){
 	    leafSize = atof(argv[3]);
 	}
 	printf("Method %s, iterations %d, leafSize %f, method %d\n", argv[1], iterations, leafSize, methodICP);
-
-
 
 	auto client = cc::Client("localhost", 2000);
 	client.SetTimeout(2s);
@@ -232,13 +234,6 @@ int main(int argc, char **argv){
 	typename pcl::PointCloud<PointT>::Ptr cloudFiltered (new pcl::PointCloud<PointT>);
 	typename pcl::PointCloud<PointT>::Ptr scanCloud (new pcl::PointCloud<PointT>);
 
-	/*pcl::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointXYZ> ndt;
-
-	ndt.setTransformationEpsilon(0.0001);
-	ndt.setStepSize(0.1);
-	ndt.setResolution(1);
-	ndt.setInputTarget(mapCloud);*/
-
 	lidar->Listen([&new_scan, &lastScanTime, &scanCloud](auto data){
 
 		if(new_scan){
@@ -279,7 +274,6 @@ int main(int argc, char **argv){
 		viewer->removeShape("steer");
 		renderRay(viewer, Point(truePose.position.x+2*cos(theta), truePose.position.y+2*sin(theta),truePose.position.z),  Point(truePose.position.x+4*cos(stheta), truePose.position.y+4*sin(stheta),truePose.position.z), "steer", Color(0,1,0));
 
-
 		ControlState accuate(0, 0, 1);
 		if(cs.size() > 0){
 			accuate = cs.back();
@@ -302,8 +296,8 @@ int main(int argc, char **argv){
 
 			// Find pose transform by using ICP or NDT matching
 			Eigen::Matrix4d transform = transform3D(pose.rotation.yaw, pose.rotation.pitch, pose.rotation.roll, pose.position.x, pose.position.y, pose.position.z);
-			// PointCloudT::Ptr transformed_scan(new PointCloudT);
 
+			// Call ICP or NDT method
 			if(methodICP){
 				transform = ICP(mapCloud, cloudFiltered, pose, iterations);
 			} else {
@@ -343,7 +337,6 @@ int main(int argc, char **argv){
 				viewer->addText("Passed!", 200, 50, 32, 0.0, 1.0, 0.0, "eval",0);
 			}
 		}
-
 			pclCloud.points.clear();
 		}
   	}
