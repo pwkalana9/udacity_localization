@@ -129,7 +129,7 @@ Eigen::Matrix4d ICP(PointCloudT::Ptr target, PointCloudT::Ptr source, Pose start
 		// If not converged, return identity matrix
 		return Eigen::Matrix4d::Identity(4,4);
 	}
-	time.toc() // Elapsed time
+	time.toc(); // Elapsed time
 
 	// Return the absolute pose, considering the starting estimate
 	return icp.getFinalTransformation().cast<double>() * startingTransform;
@@ -137,7 +137,7 @@ Eigen::Matrix4d ICP(PointCloudT::Ptr target, PointCloudT::Ptr source, Pose start
 
 Eigen::Matrix4d NDT(PointCloudT::Ptr mapCloud, PointCloudT::Ptr source, Pose startPose, int iterations){
 	pcl::console::TicToc time;
-	time.tic();
+	time.tic(); // beging measuring time
 	// Starting pose estimate
 	Eigen::Matrix4f  starting_estimate = transform3D(startPose.rotation.yaw,
 											startPose.rotation.pitch,
@@ -163,6 +163,7 @@ Eigen::Matrix4d NDT(PointCloudT::Ptr mapCloud, PointCloudT::Ptr source, Pose sta
 		// If not convereged, return the identity matrix
 		return Eigen::Matrix4d::Identity();
 	}
+	time.toc(); // Elapsed time
 
     // return the final pose
 	return ndt.getFinalTransformation().cast<double>();
